@@ -8,8 +8,8 @@ import re,json,sys,os, subprocess,io,copy,threading,platform,time,serial
 
 def recursive_dict(element):
      return element.tag, dict(map(recursive_dict, element)) or element.text
-     
-     
+
+
 class emu():
     obj_type="emu_serial"
     #this is a list of all tags that are possible in the emu!
@@ -439,7 +439,7 @@ class emu():
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
         self.debug_command(self.write_buffer)
-    
+
     def debug_command(self, msg):
         #print("debug_command:", msg)
         pass
@@ -581,7 +581,7 @@ class emu():
             'obj':dict_,
             'raw': raw
         }
-        
+
         self.history.append(history_obj)
     def readback(self, limit=100):
         limit_count = 0
@@ -597,7 +597,7 @@ class emu():
     def clear_history():
         self.history=[]
 
-        
+
 if __name__ == '__main__':
 
     # parse arguments:
@@ -607,7 +607,7 @@ if __name__ == '__main__':
                         help='Serial port of the EMU-2 plugged into USB [tty.usbmodemfd121]',
                         default="tty.usbmodemfd121")
     args = parser.parse_args()
-    
+
     # connect & output
     emu_instance = emu(vars(args)['port'])
     emu_instance.start_serial()

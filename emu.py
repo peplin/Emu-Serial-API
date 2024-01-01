@@ -530,7 +530,12 @@ class emu():
     def serial_reader(self,line):
         #this function is reads the text
         self.start_flag=False
-        line = str(line, 'UTF-8')
+        try:
+            line = str(line, 'UTF-8')
+        except  UnicodeDecodeError:
+            print("Skipping line that could not be parased as UTF-8:")
+            print(line)
+            return
         if self.look_for_start_tag(line):
             self.tag_block=True
             self.start_flag=True

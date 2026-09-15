@@ -6,6 +6,8 @@ import argparse
 from io import StringIO, BytesIO
 import re,json,sys,os, subprocess,io,copy,threading,platform,time,serial
 import queue
+import traceback
+from collections import deque
 
 def recursive_dict(element):
      return element.tag, dict(map(recursive_dict, element)) or element.text
@@ -137,9 +139,19 @@ class emu():
     illegal_xml_re = re.compile(u'[\x00-\x08\x0b-\x1f\x7f-\x84\x86-\x9f\ud800-\udfff\ufdd0-\ufddf\ufffe-\uffff]')
     original_block = ""
     history=[]
+    max_history = 100
+
     def __init__(self, port):
         self.port = port
+        # Per-instance state so a reconnect starts from a clean slate instead of
+        # inheriting the class attributes shared by every instance.
+        self.data = dict()
+        self.state = dict()
+        self.history = deque(maxlen=self.max_history)
         self.write_queue = queue.Queue()
+        self.serial_connected = False
+        self.serial_error = None
+        self.last_message_time = None
         if platform.system()=='Windows':
             self.environment = "windows"
         elif platform.system()=="Darwin":
@@ -452,42 +464,34 @@ class emu():
         PREFIXES = { "osx": self.osx_prefix, "linux": self.linux_prefix }
         prefix = PREFIXES[self.environment] if self.environment in PREFIXES else self.windows_prefix
         port = str(self.port)
-        port = port if self.port.startswith(prefix) else prefix + port
-        try:
-            self.ser = serial.Serial(port, self.baud_rate, timeout=self.timeout)
-            self.serial_connected =True
-            self.serial_attempt=0
-        except:
-            print(sys.exc_info())
-            if self.serial_attempt >3:
-                print("Throwing an error, can't connect to EMU serial")
-                raise
-            else:
-                self.serial_attempt = self.serial_attempt+1
-                print("having trouble connecting to serial...."+str(self.serial_attempt))
-                time.sleep(10)
+        # Absolute paths are used as-is, so the device can live somewhere other
+        # than /dev (e.g. a bind mount of the host's /dev).
+        port = port if port.startswith("/") or port.startswith(prefix) else prefix + port
+        self.ser = serial.Serial(port, self.baud_rate, timeout=self.timeout)
+        self.serial_connected = True
     def serial_thread(self):
         self.stop_thread=False
         #this function is the thread which reads from the serial, writes to the serial and calls parsing functions
         print("Starting serial process for EMU on "+str(self.port))
-        #inifinite loop
         try:
             self.create_serial()
-            while True:
-                if self.stop_thread is True:
-                    self.ser.close()
-                    print("Closing serial port for EMU")
-                    #in case we was to stop thread
-                    self.stop_thread=False
-                    self.serial_connected=False
-                    return
-                else:
-                    text =self.ser.readlines()
-                    for line in text:
-                        self.serial_reader(line)
-                    self.flush_write_queue()
-        except:
-            raise
+            while not self.stop_thread:
+                for line in self.ser.readlines():
+                    self.serial_reader(line)
+                self.flush_write_queue()
+        except Exception as error:
+            # Record the failure instead of only killing the thread, so the
+            # supervisor can log why it is reconnecting.
+            self.serial_error = error
+            traceback.print_exc()
+        finally:
+            self.serial_connected = False
+            self.stop_thread = False
+            try:
+                self.ser.close()
+            except Exception:
+                pass
+            print("Closing serial port for EMU")
     def flush_write_queue(self):
         while True:
             try:
@@ -498,7 +502,7 @@ class emu():
             self.write_history('HOST', name, write_buffer, None)
             time.sleep(0.1)
     def start_serial(self):
-        self.thread_handle = threading.Thread(target=self.serial_thread, args=[])
+        self.thread_handle = threading.Thread(target=self.serial_thread, args=[], daemon=True)
         self.thread_handle.start()
     def stop_serial(self):
         self.stop_thread= True
@@ -555,6 +559,7 @@ class emu():
             self.original_block = ""
         self.start_flag=False
     def block_to_tree(self,block_string,tag):
+        self.last_message_time = time.monotonic()
         block_string = self.illegal_xml_re.sub('', block_string)
         if tag in self.responseRoots:
             try:

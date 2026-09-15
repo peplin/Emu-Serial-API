@@ -5,6 +5,7 @@ import api_classes
 import argparse
 from io import StringIO, BytesIO
 import re,json,sys,os, subprocess,io,copy,threading,platform,time,serial
+import queue
 
 def recursive_dict(element):
      return element.tag, dict(map(recursive_dict, element)) or element.text
@@ -138,6 +139,7 @@ class emu():
     history=[]
     def __init__(self, port):
         self.port = port
+        self.write_queue = queue.Queue()
         if platform.system()=='Windows':
             self.environment = "windows"
         elif platform.system()=="Darwin":
@@ -149,7 +151,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def get_device_info(self):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_get_device_info
@@ -157,7 +159,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def get_network_info(self):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_get_network_info
@@ -165,7 +167,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def factory_reset(self):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_factory_reset
@@ -173,7 +175,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def get_restart_info(self):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_get_restart_info
@@ -181,7 +183,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def set_restart_info(self, _type , confirm):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_set_restart_info
@@ -193,7 +195,7 @@ class emu():
         self.command.append(self.confirm)
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def get_meter_attributes(self):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_get_meter_attributes
@@ -208,7 +210,7 @@ class emu():
         self.command.append(self.divisor)
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def set_fast_poll(self,frequency, duration):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_set_fast_poll
@@ -219,7 +221,7 @@ class emu():
         self.command.append(self.duration)
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def get_fast_poll_status(self):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_get_fast_poll_status
@@ -227,7 +229,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def get_current_price(self, refresh):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_get_current_price
@@ -237,7 +239,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def set_current_price(price,currency ,trailing_digits):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_set_current_price
@@ -249,7 +251,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def get_current_summation_delivered(self):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_get_current_summation_delivered
@@ -257,7 +259,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def get_instantaneous_demand(self,refresh ):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_get_instantaneous_demand
@@ -267,7 +269,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def get_time(self,refresh):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_get_time
@@ -277,7 +279,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def set_current_price(self,price ,trailing_digits):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_set_current_price
@@ -289,7 +291,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def set_meter_info(self,nickname,account,auth,host,enabled):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_set_current_price
@@ -307,7 +309,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def get_message(self):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_get_message
@@ -315,7 +317,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def get_local_attributes(self):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_get_local_attributes
@@ -323,7 +325,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def set_local_attributes(self,current_day_max_demand):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_set_local_attributes
@@ -333,7 +335,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def get_billing_periods(self):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_get_billing_periods
@@ -341,7 +343,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def set_billing_period_list(self,number_of_billing_period ):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_set_billing_period_list
@@ -351,7 +353,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def set_billing_period(self, period, start):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_set_billing_period
@@ -363,7 +365,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def get_price_blocks(self):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_get_price_blocks
@@ -371,7 +373,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def set_price_block(self,block,threshold,price ):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_set_price_block
@@ -385,7 +387,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def get_schedule(self, mode):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_get_schedule
@@ -395,7 +397,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def get_profile_data(self, number_of_periods , interval_channel):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_get_profile_data
@@ -407,7 +409,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def set_schedule(self,event,mode, frequency, enabled ):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_set_schedule
@@ -430,7 +432,7 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
     def print_network_tables(self):
         self.command = copy.copy(self.command_root)
         self.command_name.text = self.cmd_print_network_tables
@@ -438,11 +440,12 @@ class emu():
         #adding in the actual command
         xml_indent(self.command)
         self.write_buffer = xml_tostring(self.command)
-        self.debug_command(self.write_buffer)
+        self.queue_command(self.write_buffer)
 
-    def debug_command(self, msg):
-        #print("debug_command:", msg)
-        pass
+    def queue_command(self, msg):
+        # The command builders share one Element tree, so capture the command
+        # name now: it is overwritten as soon as another command is built.
+        self.write_queue.put((self.command_name.text, msg))
 
     def create_serial(self):
         # fix the port/prefix:
@@ -482,20 +485,18 @@ class emu():
                     text =self.ser.readlines()
                     for line in text:
                         self.serial_reader(line)
-                    if self.write_buffer is not None:
-                        try:
-                            f =open('static/emu-log.txt','a')
-                            f.write(self.write_buffer.translate(None, "<>\\"))
-                            f.write('\n')
-                            f.close()
-                        except:
-                            pass
-                        self.ser.write(self.write_buffer)
-                        self.write_history('HOST', self.command_name.text, self.write_buffer, None)
-                        self.write_buffer = None
-                        time.sleep(0.1)
+                    self.flush_write_queue()
         except:
             raise
+    def flush_write_queue(self):
+        while True:
+            try:
+                name, write_buffer = self.write_queue.get_nowait()
+            except queue.Empty:
+                return
+            self.ser.write(write_buffer)
+            self.write_history('HOST', name, write_buffer, None)
+            time.sleep(0.1)
     def start_serial(self):
         self.thread_handle = threading.Thread(target=self.serial_thread, args=[])
         self.thread_handle.start()
